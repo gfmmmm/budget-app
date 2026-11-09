@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Expense } from '@/types'
 import { supabase } from '@/lib/supabase'
-import { CATEGORY_EMOJI, MULTI_PURPOSE_VENDORS } from '@/lib/constants'
+import { CATEGORY_EMOJI, MULTI_PURPOSE_VENDORS, HIDDEN_CATEGORIES } from '@/lib/constants'
 import { formatMoney } from '@/lib/utils'
 
 interface Props {
@@ -12,38 +12,47 @@ interface Props {
   onUpdate: () => void
 }
 
-/* 인박스용 카테고리: 깔끔한 9개만 */
-const QUICK_CATS = [
-  '식비', '커피', '교통', '쇼핑', '생활비',
-  '주거비', '구독비', '문화', '기타',
-]
+/* 기본 9개 (짧은 이름) */
+const BASE = ['식비', '커피', '교통', '쇼핑', '생활비', '주거비', '구독비', '문화', '기타']
 
-export default function ReviewInbox({ reviewItems, onUpdate }: Props) {
+/* DB 카테고리 중 BASE와 "같은 계열"인지 판별 */
+const ALIAS: Record<string, string> = {
+  '교통/차량': '교통', '쇼핑/패션': '쇼핑', '주거비용': '주거비',
+  '술자리/유흥비': '술자리', '문화/자기계발': '문화',
+}
+
+export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }: Props) {
   const [saving, setSaving] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+
+  /* BASE + DB전용 카테고리(BASE에 이미 있는 계열은 제외) */
+  const dbOnly = budgetCategories.filter(c =>
+    !HIDDEN_CATEGORIES.includes(c) &&
+    !BASE.includes(c) &&
+    !BASE.includes(ALIAS[c] ?? '')
+  )
+  const categories = [...BASE, ...dbOnly]
 
   if (reviewItems.length === 0) return null
 
   const isMultiPurpose = (title: string) =>
     MULTI_PURPOSE_VENDORS.some(v => title.includes(v))
 
-  async function categorize(exp: Expense, newCategory: string) {
+  async function categorize(exp: Expense, cat: string) {
     setSaving(exp.id)
     try {
       await supabase.from('expenses')
-        .update({ category: newCategory, value_type: null })
-        .eq('id', exp.id)
+        .update({ category: cat, value_type: null }).eq('id', exp.id)
 
       const pattern = isMultiPurpose(exp.title)
         ? `${exp.title}|${exp.amount}` : exp.title
-
       await supabase.from('category_rules')
-        .upsert({ pattern, category: newCategory, updated_at: new Date().toISOString() },
+        .upsert({ pattern, category: cat, updated_at: new Date().toISOString() },
           { onConflict: 'pattern' })
 
       if (!isMultiPurpose(exp.title)) {
         await supabase.from('expenses')
-          .update({ category: newCategory, value_type: null })
+          .update({ category: cat, value_type: null })
           .eq('title', exp.title).eq('value_type', 'review')
       }
       onUpdate()
@@ -83,7 +92,7 @@ export default function ReviewInbox({ reviewItems, onUpdate }: Props) {
               </div>
 
               <div className="flex flex-wrap gap-[5px]">
-                {QUICK_CATS.map(cat => (
+                {categories.map(cat => (
                   <button key={cat} onClick={() => categorize(exp, cat)}
                     disabled={saving === exp.id}
                     className="h-[28px] px-2.5 text-[12px] rounded-lg border border-slate-200 bg-slate-50
