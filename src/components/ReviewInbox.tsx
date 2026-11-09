@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { Expense } from '@/types'
 import { supabase } from '@/lib/supabase'
-import { CATEGORIES, CATEGORY_EMOJI, MULTI_PURPOSE_VENDORS } from '@/lib/constants'
-import { formatMoney, formatDateGroup } from '@/lib/utils'
+import { CATEGORY_EMOJI, MULTI_PURPOSE_VENDORS } from '@/lib/constants'
+import { formatMoney } from '@/lib/utils'
 
 interface Props {
   reviewItems: Expense[]
@@ -12,12 +12,21 @@ interface Props {
   onUpdate: () => void
 }
 
+const INBOX_CATEGORIES = [
+  '식비', '커피', '교통', '쇼핑', '생활비',
+  '주거비', '구독비', '문화', '기타',
+]
+
 export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }: Props) {
   const [saving, setSaving] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
 
-  // budgets에서 가져온 카테고리 + 기본 카테고리 합치기 (중복 제거)
-  const categories = Array.from(new Set([...budgetCategories, ...CATEGORIES]))
+  const categories = Array.from(new Set([
+    ...INBOX_CATEGORIES,
+    ...budgetCategories.filter(c =>
+      !['아인너드 사업', '연애비용', '술자리/유흥비', '담배'].includes(c)
+    ),
+  ]))
 
   if (reviewItems.length === 0) return null
 
@@ -27,14 +36,11 @@ export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }:
   async function categorize(exp: Expense, newCategory: string) {
     setSaving(exp.id)
     try {
-      // 1. 해당 지출 업데이트
-      const { error } = await supabase
+      await supabase
         .from('expenses')
         .update({ category: newCategory, value_type: null })
         .eq('id', exp.id)
-      if (error) throw error
 
-      // 2. 학습 규칙 저장
       const pattern = isMultiPurpose(exp.title)
         ? `${exp.title}|${exp.amount}`
         : exp.title
@@ -46,25 +52,12 @@ export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }:
           { onConflict: 'pattern' }
         )
 
-      // 3. 같은 패턴의 다른 review 항목 일괄 분류
       if (!isMultiPurpose(exp.title)) {
-        // 고유 거래처: 같은 이름의 모든 review 항목
         await supabase
           .from('expenses')
           .update({ category: newCategory, value_type: null })
           .eq('title', exp.title)
           .eq('value_type', 'review')
-      } else {
-        // 다용도 거래처: 이름+금액이 같은 항목만
-        const sameCombo = reviewItems.filter(
-          r => r.id !== exp.id && r.title === exp.title && r.amount === exp.amount
-        )
-        for (const r of sameCombo) {
-          await supabase
-            .from('expenses')
-            .update({ category: newCategory, value_type: null })
-            .eq('id', r.id)
-        }
       }
 
       onUpdate()
@@ -76,56 +69,48 @@ export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }:
   }
 
   return (
-    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
-      {/* 헤더 */}
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm overflow-hidden">
       <button
         onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between"
+        className="w-full flex items-center justify-between px-4 py-3"
       >
         <div className="flex items-center gap-2">
-          <span className="text-lg">📥</span>
-          <span className="text-sm font-bold text-amber-900">판단필요</span>
-          <span className="bg-amber-400 text-amber-900 text-xs font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+          <span className="text-base">📥</span>
+          <span className="text-[13px] font-bold text-amber-900">판단필요</span>
+          <span className="bg-amber-400 text-amber-900 text-[11px] font-bold px-1.5 py-0.5 rounded-full">
             {reviewItems.length}
           </span>
         </div>
-        <span className="text-amber-700 text-sm">
-          {collapsed ? '펼치기 ▼' : '접기 ▲'}
-        </span>
+        <span className="text-amber-600 text-xs">{collapsed ? '▼' : '▲'}</span>
       </button>
 
-      {/* 아이템 리스트 */}
       {!collapsed && (
-        <div className="mt-3 space-y-2">
-          {reviewItems.slice(0, 20).map(exp => (
+        <div className="px-3 pb-3 space-y-2">
+          {reviewItems.slice(0, 10).map(exp => (
             <div
               key={exp.id}
-              className="bg-white rounded-xl p-3 border border-amber-100"
-              style={{ opacity: saving === exp.id ? 0.5 : 1 }}
+              className="bg-white rounded-xl p-3 border border-amber-100/80"
+              style={{ opacity: saving === exp.id ? 0.4 : 1 }}
             >
-              {/* 거래 정보 */}
               <div className="flex items-center justify-between mb-2">
-                <div>
-                  <span className="text-sm font-semibold text-slate-800">{exp.title}</span>
-                  <span className="text-xs text-slate-400 ml-2">
-                    {formatDateGroup(exp.date)}
-                  </span>
+                <div className="flex items-baseline gap-1.5 min-w-0">
+                  <span className="text-[13px] font-semibold text-slate-800 truncate">{exp.title}</span>
+                  <span className="text-[10px] text-slate-400 flex-shrink-0">{exp.date.slice(5)}</span>
                 </div>
-                <span className="text-sm font-bold text-slate-800">
+                <span className="text-[13px] font-bold text-slate-800 tabular-nums ml-3 flex-shrink-0">
                   {formatMoney(exp.amount)}
                 </span>
               </div>
-
-              {/* 카테고리 버튼 */}
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-[5px]">
                 {categories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => categorize(exp, cat)}
                     disabled={saving === exp.id}
-                    className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 bg-slate-50
-                               text-slate-600 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700
-                               active:bg-indigo-100 transition-colors disabled:opacity-50"
+                    className="h-[26px] px-2 text-[11px] rounded-md border border-slate-200 bg-white
+                               text-slate-500 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700
+                               active:bg-indigo-100 transition-colors disabled:opacity-40
+                               leading-none whitespace-nowrap"
                   >
                     {CATEGORY_EMOJI[cat] || ''} {cat}
                   </button>
@@ -133,12 +118,6 @@ export default function ReviewInbox({ reviewItems, budgetCategories, onUpdate }:
               </div>
             </div>
           ))}
-
-          {reviewItems.length > 20 && (
-            <p className="text-xs text-amber-700 text-center py-1">
-              +{reviewItems.length - 20}건 더
-            </p>
-          )}
         </div>
       )}
     </div>
