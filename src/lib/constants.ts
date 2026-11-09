@@ -1,0 +1,41 @@
+// 카테고리 목록
+export const CATEGORIES = [
+  '식비', '교통', '커피', '술자리', '쇼핑',
+  '생활비', '주거비', '구독비', '문화', '기타',
+] as const
+
+export type CategoryName = typeof CATEGORIES[number]
+
+// 카테고리 이모지
+export const CATEGORY_EMOJI: Record<string, string> = {
+  '식비': '🍚',
+  '교통': '🚗',
+  '커피': '☕',
+  '술자리': '🍺',
+  '쇼핑': '🛍️',
+  '생활비': '🏠',
+  '주거비': '🏢',
+  '구독비': '📱',
+  '문화': '🎬',
+  '기타': '📦',
+}
+
+// 카테고리 색상 (progress bar, tag)
+export const CATEGORY_COLOR: Record<string, string> = {
+  '식비': '#ef4444',
+  '교통': '#3b82f6',
+  '커피': '#a16207',
+  '술자리': '#8b5cf6',
+  '쇼핑': '#ec4899',
+  '생활비': '#14b8a6',
+  '주거비': '#6366f1',
+  '구독비': '#f97316',
+  '문화': '#06b6d4',
+  '기타': '#6b7280',
+}
+
+// 다용도 거래처: 이름만으로는 카테고리를 판단할 수 없음
+// → "이름|금액" 조합으로 학습
+export const MULTI_PURPOSE_VENDORS = [
+  '카카오페이', '네이버페이', '토스', '이체', 'NH체크',
+]

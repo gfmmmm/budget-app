@@ -1,0 +1,25 @@
+import type { Metadata, Viewport } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: '가계부',
+  description: '개인 가계부 웹앱',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#f8fafc',
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ko">
+      <body className="bg-slate-50 text-slate-800 antialiased">
+        {children}
+      </body>
+    </html>
+  )
+}
