@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { format, subMonths } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { toYearMonth, monthRange, lastNMonths } from '@/lib/utils'
+import { HIDDEN_CATEGORIES, HIDDEN_TITLES } from '@/lib/constants'
 import type { Expense, Budget, MonthlyTrend } from '@/types'
 
 import Dashboard from '@/components/Dashboard'
@@ -42,7 +43,12 @@ export default function HomePage() {
       .order('created_at', { ascending: false })
 
     if (expError) throw expError
-    setExpenses((expData as Expense[]) ?? [])
+    // 시연용: 숨긴 카테고리 + 개인명 필터링
+    const filtered = ((expData as Expense[]) ?? []).filter(
+      e => !HIDDEN_CATEGORIES.includes(e.category) &&
+           !HIDDEN_TITLES.some(t => e.title.includes(t))
+    )
+    setExpenses(filtered)
 
     // 이번 달 예산
     const { data: budgetData } = await supabase
@@ -50,7 +56,9 @@ export default function HomePage() {
       .select('*')
       .eq('period', viewMonth)
 
-    setBudgets((budgetData as Budget[]) ?? [])
+    setBudgets(((budgetData as Budget[]) ?? []).filter(
+      b => !HIDDEN_CATEGORIES.includes(b.category)
+    ))
 
     // 전월 지출 합계
     const prevMonth = toYearMonth(subMonths(new Date(viewMonth + '-01'), 1))
@@ -62,7 +70,7 @@ export default function HomePage() {
       .lte('date', prevRange.end)
 
     const prevTotal = (prevData ?? [])
-      .filter((e: { excluded?: boolean; value_type?: string | null }) => !e.excluded && e.value_type !== 'review')
+      .filter((e: { excluded?: boolean; value_type?: string | null; category?: string }) => !e.excluded && e.value_type !== 'review' && !HIDDEN_CATEGORIES.includes(e.category || ''))
       .reduce((s: number, e: { amount: number }) => s + e.amount, 0)
     setPrevMonthTotal(prevTotal)
 
@@ -85,6 +93,7 @@ export default function HomePage() {
     }
     for (const e of (trendRaw ?? []) as Array<{ date: string; amount: number; category: string; excluded?: boolean; value_type?: string | null }>) {
       if (e.excluded || e.value_type === 'review') continue
+      if (HIDDEN_CATEGORIES.includes(e.category)) continue
       const ym = e.date.slice(0, 7)
       const entry = trendMap.get(ym)
       if (entry) {
